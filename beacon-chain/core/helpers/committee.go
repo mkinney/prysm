@@ -16,6 +16,7 @@ import (
 )
 
 var shuffledIndicesCache = cache.NewShuffledIndicesCache()
+var committeeCache = cache.NewCommitteeCache()
 
 // CommitteeCount returns the number of crosslink committees of an epoch.
 //
@@ -168,7 +169,6 @@ func ComputeAllCommittees(state *pb.BeaconState, epoch uint64) ([]uint64, error)
 
 	return shuffledIndices, nil
 }
-
 
 // AttestingIndices returns the attesting participants indices from the attestation data.
 //
@@ -491,4 +491,33 @@ func compressValidator(validator *ethpb.Validator, idx uint64) uint64 {
 	compactBalance &= 0x7FFF // 0b01111111 0b11111111
 	compactValidator := compactIndex | slashedBit | compactBalance
 	return compactValidator
+}
+
+// Update committee cache gets called at the beginning of every epoch to cache the shuffled committee
+// list with start shard and epoch number.
+func UpdateCommitteeCache(state *pb.BeaconState) error {
+	currentEpoch := CurrentEpoch(state)
+	for _, epoch := range []uint64{currentEpoch, currentEpoch + 1} {
+		committees, err := ComputeAllCommittees(state, epoch)
+		if err != nil {
+			return err
+		}
+		startShard, err := StartShard(state, epoch)
+		if err != nil {
+			return err
+		}
+		committeeCount, err := CommitteeCount(state, epoch)
+		if err != nil {
+			return err
+		}
+		if err := committeeCache.AddCommitteeList(&cache.CommitteeByShardEpoch{
+			Epoch:          epoch,
+			Committee:      committees,
+			StartShard:     startShard,
+			CommitteeCount: committeeCount,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

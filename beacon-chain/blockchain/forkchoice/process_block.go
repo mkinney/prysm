@@ -117,18 +117,12 @@ func (s *Store) OnBlock(ctx context.Context, b *ethpb.BeaconBlock) error {
 	if helpers.IsEpochStart(postState.Slot) {
 		logEpochData(postState)
 		reportEpochMetrics(postState)
-		currentEpoch := helpers.CurrentEpoch(postState)
-		nextEpoch := currentEpoch + 1
-		committees, err := helpers.ComputeAllCommittees(postState, currentEpoch)
-		if err != nil {
-			return errors.Wrapf(err, "could not compute committees for current epoch: %d", currentEpoch)
+		if err := helpers.UpdateCommitteeCache(postState); err != nil {
+			return err
 		}
-		log.Error("current epoch", currentEpoch, committees)
-		committees, err = helpers.ComputeAllCommittees(postState, nextEpoch)
-		if err != nil {
-			return errors.Wrapf(err, "could not compute committees for next epoch: %d", nextEpoch)
+		if err := helpers.LogCommitteeCache(postState); err != nil {
+			return err
 		}
-		log.Error("next epoch", nextEpoch, committees)
 	}
 
 	return nil
