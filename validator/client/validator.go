@@ -233,6 +233,7 @@ func (v *validator) UpdateAssignments(ctx context.Context, slot uint64) error {
 			lFields["attesterSlot"] = attesterSlot
 			lFields["proposerSlot"] = "Not proposing"
 			lFields["shard"] = assignment.Shard
+			lFields["committee"] = assignment.Committee
 
 			if assignment.IsProposer {
 				lFields["proposerSlot"] = proposerSlot

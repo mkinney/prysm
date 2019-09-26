@@ -144,6 +144,32 @@ func ComputeCommittee(
 	return shuffledIndices, nil
 }
 
+func ComputeAllCommittees(state *pb.BeaconState, epoch uint64) ([]uint64, error) {
+	seed, err := Seed(state, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get seed")
+	}
+
+	indices, err := ActiveValidatorIndices(state, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get active indices")
+	}
+
+	validatorCount := uint64(len(indices))
+
+	shuffledIndices := make([]uint64, len(indices))
+	for i := 0; i < len(shuffledIndices); i++ {
+		permutedIndex, err := ShuffledIndex(uint64(i), validatorCount, seed)
+		if err != nil {
+			return []uint64{}, errors.Wrapf(err, "could not get shuffled index at index %d", i)
+		}
+		shuffledIndices[i] = indices[permutedIndex]
+	}
+
+	return shuffledIndices, nil
+}
+
+
 // AttestingIndices returns the attesting participants indices from the attestation data.
 //
 // Spec pseudocode definition:
