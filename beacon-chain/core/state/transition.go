@@ -121,6 +121,15 @@ func ExecuteStateTransitionNoVerify(
 		}
 	}
 
+	postStateRoot, err := ssz.HashTreeRoot(state)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not tree hash processed state")
+	}
+	if !bytes.Equal(postStateRoot[:], block.StateRoot) {
+		return state, fmt.Errorf("validate state root failed, wanted: %#x, received: %#x",
+			postStateRoot[:], block.StateRoot)
+	}
+
 	return state, nil
 }
 
