@@ -476,7 +476,7 @@ func (b *BeaconNode) registerPrometheusService(ctx *cli.Context) error {
 	if err := b.services.FetchService(&c); err != nil {
 		panic(err)
 	}
-	additionalHandlers = append(additionalHandlers, prometheus.Handler{Path: "/heads", Handler: c.HeadsHandler})
+	additionalHandlers = append(additionalHandlers, prometheus.Handler{Path: "/tree", Handler: c.HeadsHandler})
 
 	service := prometheus.NewPrometheusService(
 		fmt.Sprintf(":%d", ctx.GlobalInt64(cmd.MonitoringPortFlag.Name)),

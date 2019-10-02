@@ -245,6 +245,12 @@ go_repository(
 )
 
 go_repository(
+    name = "com_github_awalterschulze_gographviz",
+    commit = "fa59802746ab47bad3c8876d678d41299cdd1aaa",
+    importpath = "github.com/awalterschulze/gographviz",
+)
+
+go_repository(
     name = "com_github_libp2p_go_libp2p",
     commit = "c1687281a5c19b61ee5e0dc07fad15697c3bde94",  # v0.4.0
     importpath = "github.com/libp2p/go-libp2p",
