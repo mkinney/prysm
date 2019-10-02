@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/prysmaticlabs/go-ssz"
@@ -17,14 +18,15 @@ import (
 	"github.com/prysmaticlabs/prysm/shared/bytesutil"
 	"github.com/prysmaticlabs/prysm/shared/params"
 	"github.com/sirupsen/logrus"
-	"github.com/awalterschulze/gographviz"
+	"github.com/emicklei/dot"
 )
 
 const latestSlotCount = 10
+const treeSize = 64
 
 type node struct {
-	parentRoot string
-	selfRoot string
+	parentRoot [32]byte
+	dothNode *dot.Node
 }
 
 // BlockTreeHandler is a handler to serve /tree page in metrics.
@@ -58,28 +60,36 @@ func (s *Service) BlockTreeHandler(w http.ResponseWriter, _ *http.Request) {
 
 // HeadsHandler is a handler to serve /heads page in metrics.
 func (s *Service) HeadsHandler(w http.ResponseWriter, r *http.Request) {
-	graphAst, _ := gographviz.Parse([]byte(`digraph G{}`))
-	graph := gographviz.NewGraph()
-	gographviz.Analyse(graphAst, graph)
-
+	graph := dot.NewGraph(dot.Directed)
+	graph.Attr("rankdir", "RL")
+	graph.Attr("label", "Canonical block = green")
+	graph.Attr("labeljust", "0,0")
 	currentSlot := s.currentSlot()
-	filter := filters.NewFilter().SetStartSlot(1).SetEndSlot(currentSlot)
-	blks, err := s.beaconDB.Blocks(context.Background(), filter)
-	nodes := make([]node, len(blks))
-	for i:=0; i<len(nodes) ; i++  {
-		r, _ := ssz.SigningRoot(blks[i])
-		nodes[i].selfRoot = hex.EncodeToString(r[:1])
-		nodes[i].parentRoot = hex.EncodeToString(blks[i].ParentRoot[:1])
+	startSlot := uint64(1)
+	if currentSlot - treeSize > startSlot {
+		startSlot = currentSlot - treeSize
 	}
-	for i := 0; i<len(nodes); i++ {
-		n := nodes[i]
-		if err := graph.AddNode("G", n.selfRoot, nil); err != nil {
-			log.WithError(err).Error("Could not add node to graph")
+	filter := filters.NewFilter().SetStartSlot(startSlot).SetEndSlot(currentSlot)
+	blks, err := s.beaconDB.Blocks(context.Background(), filter)
+	m := make(map[[32]byte]*node)
+	for i := 0; i<len(blks); i++ {
+		b := blks[i]
+		r, _ := ssz.SigningRoot(b)
+		label := "slot: " + strconv.Itoa(int(b.Slot)) + "\n root: " + hex.EncodeToString(r[:2])
+		dotN := graph.Node(hex.EncodeToString(r[:2])).Box().Attr("label", label)
+		if bytes.Equal(r[:], s.CanonicalRoot(b.Slot)) {
+			dotN = dotN.Attr("color", "green")
 		}
-		if i != 0 {
-			if err := graph.AddEdge(n.parentRoot, n.selfRoot, true, nil); err != nil {
-				log.WithError(err).Error("Could not add node to graph")
-			}
+		n := &node{
+			parentRoot: bytesutil.ToBytes32(b.ParentRoot),
+			dothNode: &dotN,
+		}
+		m[r] = n
+	}
+
+	for _, n := range m {
+		if _, ok := m[n.parentRoot]; ok {
+			graph.Edge(*n.dothNode, *m[n.parentRoot].dothNode)
 		}
 	}
 
