@@ -855,7 +855,7 @@ func attestationDelta(state *pb.BeaconState) ([]uint64, []uint64, error) {
 			return nil, nil, errors.Wrap(err, "could not get proposer reward")
 		}
 		proposerReward := baseReward / params.BeaconConfig().ProposerRewardQuotient
-		//rewards[a.ProposerIndex] += proposerReward
+		rewards[a.ProposerIndex] += proposerReward
 		attesterReward := baseReward - proposerReward
 		rewards[i] += attesterReward * (slotsPerEpoch + params.BeaconConfig().MinAttestationInclusionDelay - a.InclusionDelay) / slotsPerEpoch
 	}

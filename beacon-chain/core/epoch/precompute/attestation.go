@@ -40,7 +40,12 @@ func ProcessAttestations(
 		if err != nil {
 			return nil, nil, err
 		}
-		vp = UpdateValidator(vp, v, indices, a)
+		aSlot, err := helpers.AttestationDataSlot(state, a.Data)
+		if err != nil {
+			return nil, nil, err
+
+		}
+		vp = UpdateValidator(vp, v, indices, a, aSlot)
 	}
 
 	bp = UpdateBalance(vp, bp)
@@ -121,7 +126,8 @@ func SameHead(state *pb.BeaconState, a *pb.PendingAttestation) (bool, error) {
 }
 
 // UpdateValidator updates pre computed validator store.
-func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *pb.PendingAttestation) []*Validator {
+func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *pb.PendingAttestation, s uint64) []*Validator {
+	inclusionSlot := s + a.InclusionDelay
 	for _, i := range indices {
 		if record.IsCurrentEpochAttester {
 			vp[i].IsCurrentEpochAttester = true
@@ -138,8 +144,11 @@ func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *pb
 		if record.IsPrevEpochHeadAttester {
 			vp[i].IsPrevEpochHeadAttester = true
 		}
-		vp[i].InclusionDistance = a.InclusionDelay
-		vp[i].ProposerIndex = a.ProposerIndex
+		if inclusionSlot < vp[i].InclusionSlot {
+			vp[i].InclusionSlot = s + a.InclusionDelay
+			vp[i].InclusionDistance = a.InclusionDelay
+			vp[i].ProposerIndex = a.ProposerIndex
+		}
 	}
 	return vp
 }

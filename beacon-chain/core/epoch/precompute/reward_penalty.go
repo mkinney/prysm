@@ -74,10 +74,10 @@ func attestationDelta(state *pb.BeaconState, bp *Balance, v *Validator) (uint64,
 	// Process source reward / penalty
 	if v.IsPrevEpochAttester && !v.IsSlashed {
 		r += br * bp.PrevEpochAttesters / bp.CurrentEpoch
-		//proposerReward := br / params.BeaconConfig().ProposerRewardQuotient
-		//maxAtteserReward := br - proposerReward
-		//slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-		//r += maxAtteserReward * (slotsPerEpoch + params.BeaconConfig().MinAttestationInclusionDelay - v.InclusionDistance) / slotsPerEpoch
+		proposerReward := br / params.BeaconConfig().ProposerRewardQuotient
+		maxAtteserReward := br - proposerReward
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		r += maxAtteserReward * (slotsPerEpoch + params.BeaconConfig().MinAttestationInclusionDelay - v.InclusionDistance) / slotsPerEpoch
 	} else {
 		p += br
 	}
