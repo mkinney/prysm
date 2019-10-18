@@ -302,7 +302,10 @@ func ProcessRewardsAndPenalties(state *pb.BeaconState) (*pb.BeaconState, error) 
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get crosslink delta")
 	}
-
+	fmt.Println("1-AttRewards", attsRewards)
+	fmt.Println("1-CrosslinkRewards", clRewards)
+	fmt.Println("1-AttP", attsPenalties)
+	fmt.Println("1-CrosslinkP", clPenalties)
 	for i := 0; i < len(state.Validators); i++ {
 		state = helpers.IncreaseBalance(state, uint64(i), attsRewards[i]+clRewards[i])
 		state = helpers.DecreaseBalance(state, uint64(i), attsPenalties[i]+clPenalties[i])
@@ -852,7 +855,7 @@ func attestationDelta(state *pb.BeaconState) ([]uint64, []uint64, error) {
 			return nil, nil, errors.Wrap(err, "could not get proposer reward")
 		}
 		proposerReward := baseReward / params.BeaconConfig().ProposerRewardQuotient
-		rewards[a.ProposerIndex] += proposerReward
+		//rewards[a.ProposerIndex] += proposerReward
 		attesterReward := baseReward - proposerReward
 		rewards[i] += attesterReward * (slotsPerEpoch + params.BeaconConfig().MinAttestationInclusionDelay - a.InclusionDelay) / slotsPerEpoch
 	}

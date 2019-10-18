@@ -1,6 +1,8 @@
 package precompute
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/epoch"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/helpers"
@@ -34,7 +36,11 @@ func ProcessRewardsAndPenaltiesPrecompute(state *pb.BeaconState, bp *Balance, vp
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get crosslink delta")
 	}
-
+	fmt.Println("2-AttRewards", attsRewards)
+	fmt.Println("2-CrosslinkRewards", clRewards)
+	fmt.Println("2-ProposerRewards", proposerRewards)
+	fmt.Println("2-AttP", attsPenalties)
+	fmt.Println("2-CrosslinkP", clPenalties)
 	for i := 0; i < len(state.Validators); i++ {
 		state = helpers.IncreaseBalance(state, uint64(i), attsRewards[i]+clRewards[i]+proposerRewards[i])
 		state = helpers.DecreaseBalance(state, uint64(i), attsPenalties[i]+clPenalties[i])
@@ -68,10 +74,10 @@ func attestationDelta(state *pb.BeaconState, bp *Balance, v *Validator) (uint64,
 	// Process source reward / penalty
 	if v.IsPrevEpochAttester && !v.IsSlashed {
 		r += br * bp.PrevEpochAttesters / bp.CurrentEpoch
-		proposerReward := br / params.BeaconConfig().ProposerRewardQuotient
-		maxAtteserReward := br - proposerReward
-		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-		r += maxAtteserReward * (slotsPerEpoch + params.BeaconConfig().MinAttestationInclusionDelay - v.InclusionDistance) / slotsPerEpoch
+		//proposerReward := br / params.BeaconConfig().ProposerRewardQuotient
+		//maxAtteserReward := br - proposerReward
+		//slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		//r += maxAtteserReward * (slotsPerEpoch + params.BeaconConfig().MinAttestationInclusionDelay - v.InclusionDistance) / slotsPerEpoch
 	} else {
 		p += br
 	}
@@ -83,7 +89,7 @@ func attestationDelta(state *pb.BeaconState, bp *Balance, v *Validator) (uint64,
 		p += br
 	}
 
-	// Process heard reward / penalty
+	// Process head reward / penalty
 	if v.IsPrevEpochHeadAttester && !v.IsSlashed {
 		r += br * bp.PrevEpochHeadAttesters / bp.CurrentEpoch
 	} else {
@@ -108,12 +114,12 @@ func proposerDeltaPrecompute(state *pb.BeaconState, bp *Balance, vp []*Validator
 
 	totalBalance := bp.CurrentEpoch
 
-	for i, v := range vp {
+	for _, v := range vp {
 		if v.IsPrevEpochAttester {
 			vBalance := v.CurrentEpochEffectiveBalance
 			baseReward := vBalance * params.BeaconConfig().BaseRewardFactor / mathutil.IntegerSquareRoot(totalBalance) / params.BeaconConfig().BaseRewardsPerEpoch
 			proposerReward := baseReward / params.BeaconConfig().ProposerRewardQuotient
-			rewards[i] += proposerReward
+			rewards[v.ProposerIndex] += proposerReward
 		}
 	}
 	return rewards, nil
