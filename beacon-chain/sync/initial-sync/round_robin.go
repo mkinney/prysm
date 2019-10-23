@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -23,6 +22,7 @@ import (
 )
 
 const blockBatchSize = 64
+const maxPeersToSync = 15
 const counterSeconds = 20
 
 // Round Robin sync looks at the latest peer statuses and syncs with the highest
@@ -44,7 +44,9 @@ func (s *InitialSync) roundRobinSync(genesis time.Time) error {
 	var lastEmptyRequests int
 	errChan := make(chan error)
 	// Step 1 - Sync to end of finalized epoch.
-	for s.chain.HeadSlot() < helpers.StartSlot(highestFinalizedEpoch()+1) {
+	for s.chain.HeadSlot() < helpers.StartSlot(highestFinalizedEpoch()) {
+		log.WithField("head status:", s.chain.HeadSlot()).Debugf("helpers.StartSlot(highestFinalizedEpoch()+1)-1: %v", helpers.StartSlot(highestFinalizedEpoch()))
+
 		root, finalizedEpoch, peers := bestFinalized()
 
 		var blocks []*eth.BeaconBlock
@@ -70,24 +72,25 @@ func (s *InitialSync) roundRobinSync(genesis time.Time) error {
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
-				start := start + uint64(i)*step
-				step := step * uint64(len(peers))
-				count := mathutil.Min(count, (helpers.StartSlot(finalizedEpoch+1)-start)/step)
+				stp := step * uint64(len(peers))
+				cnt := count / uint64(len(peers))
+				str := start + uint64(i)*step
+				cnt = mathutil.Min(cnt, (helpers.StartSlot(finalizedEpoch+1)-str)/stp)
 				// If the count was divided by an odd number of peers, there will be some blocks
 				// missing from the first requests so we accommodate that scenario.
 				if i < remainder {
-					count++
+					cnt++
 				}
 				// asking for no blocks may cause the client to hang. This should never happen and
 				// the peer may return an error anyway, but we'll ask for at least one block.
-				if count == 0 {
-					count = 1
+				if cnt == 0 {
+					break
 				}
 				req := &p2ppb.BeaconBlocksByRangeRequest{
 					HeadBlockRoot: root,
-					StartSlot:     start,
-					Count:         count,
-					Step:          step,
+					StartSlot:     str,
+					Count:         cnt,
+					Step:          stp,
 				}
 
 				// Fulfill requests asynchronously, in parallel, and wait for results from all.
@@ -99,8 +102,6 @@ func (s *InitialSync) roundRobinSync(genesis time.Time) error {
 					if err != nil {
 						// fail over to other peers by splitting this requests evenly across them.
 						ps := append(peers[:i], peers[i+1:]...)
-						rand.Seed(time.Now().UnixNano())
-						rand.Shuffle(len(ps), func(i, j int) { ps[i], ps[j] = ps[j], ps[i] })
 						log.WithError(err).WithField(
 							"remaining peers",
 							len(ps),
@@ -112,12 +113,7 @@ func (s *InitialSync) roundRobinSync(genesis time.Time) error {
 							errChan <- errors.WithStack(errors.New("no peers left to request blocks"))
 							return
 						}
-						for _, p := range ps {
-							resp, err = s.requestBlocks(ctx, req, p)
-							if err == nil {
-								break
-							}
-						}
+						_, err = request(str, stp, cnt /*count*/, ps, int(cnt)%len(ps) /*remainder*/)
 						if err != nil {
 							errChan <- err
 							return
@@ -194,8 +190,7 @@ func (s *InitialSync) roundRobinSync(genesis time.Time) error {
 	// mitigation. We are already convinced that we are on the correct finalized chain. Any blocks
 	// we receive there after must build on the finalized chain or be considered invalid during
 	// fork choice resolution / block processing.
-	best := bestPeer()
-	root, _, _ := bestFinalized()
+	root, _, peers := bestFinalized()
 	for head := slotsSinceGenesis(genesis); s.chain.HeadSlot() < head; {
 		req := &p2ppb.BeaconBlocksByRangeRequest{
 			HeadBlockRoot: root,
@@ -204,17 +199,21 @@ func (s *InitialSync) roundRobinSync(genesis time.Time) error {
 			Step:          1,
 		}
 
-		log.WithField("req", req).WithField("peer", best.Pretty()).Debug(
-			"Sending batch block request",
-		)
-
-		resp, err := s.requestBlocks(ctx, req, best)
-		if err != nil {
-			return err
+		var resp []*eth.BeaconBlock
+		var err error
+		var p peer.ID
+		for _, p = range peers {
+			log.WithField("req", req).WithField("peer", p.Pretty()).Debug(
+				"Sending batch block request",
+			)
+			resp, err = s.requestBlocks(ctx, req, p)
+			if err == nil {
+				break
+			}
 		}
 
 		for _, blk := range resp {
-			logSyncStatus(genesis, blk, []peer.ID{best}, counter)
+			logSyncStatus(genesis, blk, []peer.ID{p}, counter)
 			if err := s.chain.ReceiveBlockNoPubsubForkchoice(ctx, blk); err != nil {
 				return err
 			}
@@ -287,6 +286,9 @@ func bestFinalized() ([]byte, uint64, []peer.ID) {
 		s := peerstatus.Get(k)
 		if s.FinalizedEpoch >= rootToEpoch[mostVotedFinalizedRoot] {
 			pids = append(pids, k)
+			if len(pids) >= maxPeersToSync {
+				break
+			}
 		}
 	}
 
