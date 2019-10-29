@@ -829,6 +829,27 @@ func TestValidatorStatus_UnknownStatus(t *testing.T) {
 	}
 }
 
+func TestValidatorStatus_InvalidHead(t *testing.T) {
+	db := dbutil.SetupDB(t)
+	defer dbutil.TeardownDB(t, db)
+	pubKey := []byte{'A'}
+	depositCache := depositcache.NewDepositCache()
+	vs := &ValidatorServer{
+		depositFetcher: depositCache,
+		headFetcher: nil,
+	}
+	req := &pb.ValidatorIndexRequest{
+		PublicKey: pubKey,
+	}
+	resp, err := vs.ValidatorStatus(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Could not get validator status %v", err)
+	}
+	if resp.Status != pb.ValidatorStatus_UNKNOWN_STATUS {
+		t.Errorf("Wanted %v, got %v", pb.ValidatorStatus_UNKNOWN_STATUS, resp.Status)
+	}
+}
+
 func TestWaitForActivation_ContextClosed(t *testing.T) {
 	db := dbutil.SetupDB(t)
 	defer dbutil.TeardownDB(t, db)
