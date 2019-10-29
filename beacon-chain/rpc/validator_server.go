@@ -102,6 +102,9 @@ func (vs *ValidatorServer) ValidatorPerformance(
 ) (*pb.ValidatorPerformanceResponse, error) {
 	var err error
 	headState := vs.headFetcher.HeadState()
+	if headState == nil {
+		return nil, errors.Wrap(err, "could not retrieve head state")
+	}
 	// Advance state with empty transitions up to the requested epoch start slot.
 	if req.Slot > headState.Slot {
 		headState, err = state.ProcessSlots(ctx, headState, req.Slot)
@@ -293,6 +296,11 @@ func (vs *ValidatorServer) DomainData(ctx context.Context, request *pb.DomainReq
 }
 
 func (vs *ValidatorServer) validatorStatus(ctx context.Context, pubKey []byte, headState *pbp2p.BeaconState) *pb.ValidatorStatusResponse {
+	if headState == nil {
+		return &pb.ValidatorStatusResponse{
+			Status: pb.ValidatorStatus_UNKNOWN_STATUS,
+		}
+	}
 	_, eth1BlockNumBigInt := vs.depositFetcher.DepositByPubkey(ctx, pubKey)
 	if eth1BlockNumBigInt == nil {
 		return &pb.ValidatorStatusResponse{
@@ -307,6 +315,7 @@ func (vs *ValidatorServer) validatorStatus(ctx context.Context, pubKey []byte, h
 		Eth1DepositBlockNumber: eth1BlockNumBigInt.Uint64(),
 	}
 
+
 	depositBlockSlot, err := vs.depositBlockSlot(ctx, headState.Slot, eth1BlockNumBigInt, headState)
 	if err != nil {
 		return statusResp
@@ -317,7 +326,7 @@ func (vs *ValidatorServer) validatorStatus(ctx context.Context, pubKey []byte, h
 	if err != nil {
 		return statusResp
 	}
-	if !ok || headState == nil {
+	if !ok {
 		return statusResp
 	}
 
